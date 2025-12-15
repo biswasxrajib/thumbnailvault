@@ -1,6 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Search, X, Eye, TrendingUp, Palette, Grid3x3, Camera, ChevronLeft, ChevronRight, ArrowUpDown } from 'lucide-react';
-
+import { Search, X, Eye, TrendingUp, Palette, Grid, Camera, ChevronLeft, ChevronRight, ArrowUpDown } from 'lucide-react';
 const SUPABASE_URL = 'https://cqnyuuickdkcaadeyrri.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNxbnl1dWlja2RrY2FhZGV5cnJpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU2NzM2NTksImV4cCI6MjA4MTI0OTY1OX0.yLme_z7wWPWoJ7D9sqdbgvgdFDemMbWvSBeNmbdZ4UI';
 
@@ -219,7 +218,8 @@ const PublicGallery = () => {
           <div className="space-y-4">
             <div>
               <div className="flex items-center gap-2 mb-2">
-                <Grid3x3 className="w-4 h-4 text-purple-400" />
+              <Grid className="w-4 h-4 text-purple-400" />
+
                 <span className="text-slate-300 text-sm font-medium">Content Type</span>
               </div>
               <div className="flex flex-wrap gap-2">
