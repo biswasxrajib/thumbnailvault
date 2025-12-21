@@ -651,3 +651,19 @@ const AdminPanel = () => {
                   <button onClick={handleApprove} disabled={isApproving} className="flex-1 px-4 py-3 bg-green-500 hover:bg-green-600 disabled:bg-slate-700 text-white font-medium rounded-lg flex items-center justify-center gap-2">
                     {isApproving ? <Loader className="w-5 h-5 animate-spin" /> : <CheckCircle className="w-5 h-5" />}
                     {isApproving ? 'Fetching YouTube Stats...' : 'Approve & Publish'}
+                  </button>
+                  <button onClick={handleReject} disabled={isApproving} className="flex-1 px-4 py-3 bg-red-500 hover:bg-red-600 disabled:bg-slate-700 text-white font-medium rounded-lg flex items-center justify-center gap-2">
+                    <XCircle className="w-5 h-5" />
+                    Reject
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default AdminPanel;
