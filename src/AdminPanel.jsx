@@ -12,6 +12,7 @@ const AdminPanel = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [scrapeResult, setScrapeResult] = useState(null);
   const [pendingThumbnails, setPendingThumbnails] = useState([]);
+  const [publishedThumbnails, setPublishedThumbnails] = useState([]);
   const [selectedThumbnail, setSelectedThumbnail] = useState(null);
   const [isApproving, setIsApproving] = useState(false);
   
@@ -29,6 +30,7 @@ const AdminPanel = () => {
 
   useEffect(() => {
     loadPendingThumbnails();
+    loadPublishedThumbnails();
   }, []);
 
   const supabaseRequest = async (endpoint, options = {}) => {
@@ -59,6 +61,17 @@ const AdminPanel = () => {
     } catch (error) {
       console.error('Error loading pending thumbnails:', error);
       setPendingThumbnails([]);
+    }
+  };
+
+  const loadPublishedThumbnails = async () => {
+    try {
+      const data = await supabaseRequest('thumbnails?status=eq.approved&order=approved_at.desc');
+      setPublishedThumbnails(data || []);
+      console.log('✅ Loaded published thumbnails:', data.length);
+    } catch (error) {
+      console.error('Error loading published thumbnails:', error);
+      setPublishedThumbnails([]);
     }
   };
 
@@ -289,6 +302,7 @@ const AdminPanel = () => {
       setSelectedThumbnail(null);
       setActiveTab('pending');
       await loadPendingThumbnails();
+      await loadPublishedThumbnails();
       
       // Trigger gallery refresh
       window.dispatchEvent(new CustomEvent('thumbnailApproved'));
@@ -314,6 +328,32 @@ const AdminPanel = () => {
       await loadPendingThumbnails();
     } catch (error) {
       console.error('Rejection error:', error);
+    }
+  };
+
+  const handleUnpublish = async (thumbnail) => {
+    if (!confirm(`Unpublish "${thumbnail.title}"?\n\nThis will remove it from the public gallery and move it back to pending.`)) {
+      return;
+    }
+
+    try {
+      await supabaseRequest(`thumbnails?id=eq.${thumbnail.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          status: 'pending',
+          approved_at: null
+        })
+      });
+
+      alert('✅ Thumbnail unpublished and moved to pending!');
+      await loadPublishedThumbnails();
+      await loadPendingThumbnails();
+      
+      // Trigger gallery refresh
+      window.dispatchEvent(new CustomEvent('thumbnailApproved'));
+    } catch (error) {
+      console.error('Unpublish error:', error);
+      alert('❌ Error unpublishing thumbnail');
     }
   };
 
@@ -356,6 +396,15 @@ const AdminPanel = () => {
               }`}
             >
               Pending ({pendingThumbnails.length})
+            </button>
+            <button
+              onClick={() => setActiveTab('published')}
+              className={`px-4 py-2 rounded-lg font-medium transition-all ${
+                activeTab === 'published' ? 'bg-purple-500 text-white' : 'bg-slate-800/50 text-slate-400'
+              }`}
+            >
+              <CheckCircle className="w-4 h-4 inline mr-2" />
+              Published ({publishedThumbnails.length})
             </button>
           </div>
         </div>
@@ -600,17 +649,8 @@ const AdminPanel = () => {
 
                 <div className="flex gap-3 pt-4 border-t border-slate-700">
                   <button onClick={handleApprove} disabled={isApproving} className="flex-1 px-4 py-3 bg-green-500 hover:bg-green-600 disabled:bg-slate-700 text-white font-medium rounded-lg flex items-center justify-center gap-2">
-                    {isApproving ? (
-                      <>
-                        <Loader className="w-5 h-5 animate-spin" />
-                        Approving...
-                      </>
-                    ) : (
-                      <>
-                        <CheckCircle className="w-5 h-5" />
-                        Approve & Publish
-                      </>
-                    )}
+                    {isApproving ? <Loader className="w-5 h-5 animate-spin" /> : <CheckCircle className="w-5 h-5" />}
+                    {isApproving ? 'Fetching YouTube Stats...' : 'Approve & Publish'}
                   </button>
                   <button onClick={handleReject} disabled={isApproving} className="px-4 py-3 bg-slate-700 hover:bg-slate-600 disabled:bg-slate-800 text-white font-medium rounded-lg flex items-center justify-center gap-2">
                     <XCircle className="w-5 h-5" />
@@ -621,9 +661,45 @@ const AdminPanel = () => {
             </div>
           </div>
         )}
+
+        {activeTab === 'published' && (
+          <div>
+            <h2 className="text-xl font-bold text-white mb-6">Published Thumbnails ({publishedThumbnails.length})</h2>
+            
+            {publishedThumbnails.length === 0 ? (
+              <div className="text-center py-20">
+                <p className="text-slate-400 text-lg">No thumbnails published yet</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {publishedThumbnails.map(thumb => (
+                  <div key={thumb.id} className="bg-slate-800/50 border border-slate-700 rounded-lg overflow-hidden">
+                    <img src={thumb.thumbnail_url} alt={thumb.title} className="w-full aspect-video object-cover" />
+                    <div className="p-4">
+                      <h3 className="text-white font-medium mb-1 line-clamp-2">{thumb.title}</h3>
+                      <p className="text-slate-400 text-sm mb-3">{thumb.creator}</p>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleReview(thumb)}
+                          className="flex-1 px-4 py-2 bg-purple-500 hover:bg-purple-600 text-white font-medium rounded-lg text-sm"
+                        >
+                          View Details
+                        </button>
+                        <button
+                          onClick={() => handleUnpublish(thumb)}
+                          className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white font-medium rounded-lg text-sm"
+                        >
+                          Unpublish
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
 };
-
-export default AdminPanel;
