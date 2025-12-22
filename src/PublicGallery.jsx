@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Search, X, Eye, TrendingUp, Palette, Grid, Camera, ChevronLeft, ChevronRight, ArrowUpDown } from 'lucide-react';
+import { Search, X, Eye, TrendingUp, Palette, Grid3x3, Camera, ChevronLeft, ChevronRight, ArrowUpDown } from 'lucide-react';
+
 const SUPABASE_URL = 'https://cqnyuuickdkcaadeyrri.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNxbnl1dWlja2RrY2FhZGV5cnJpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU2NzM2NTksImV4cCI6MjA4MTI0OTY1OX0.yLme_z7wWPWoJ7D9sqdbgvgdFDemMbWvSBeNmbdZ4UI';
 
@@ -12,6 +13,16 @@ const PublicGallery = () => {
   const [sortBy, setSortBy] = useState('recently-added');
   const [thumbnails, setThumbnails] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [showAuth, setShowAuth] = useState(false);
+  const [user, setUser] = useState(null);
+  const [savedItems, setSavedItems] = useState([]);
+  const [showSaved, setShowSaved] = useState(false);
+  const [authMode, setAuthMode] = useState('login');
+  const [authEmail, setAuthEmail] = useState('');
+  const [authPassword, setAuthPassword] = useState('');
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authError, setAuthError] = useState(null);
+  const [authMessage, setAuthMessage] = useState(null);
 
   const contentTypes = ['Tutorial', 'Vlog', 'Gaming', 'Education', 'Review', 'Commentary', 'Entertainment'];
   const designStyles = ['Minimalist', 'Bold', 'Cinematic', 'Clean', 'Dramatic', 'Playful'];
@@ -19,6 +30,7 @@ const PublicGallery = () => {
 
   useEffect(() => {
     loadApprovedThumbnails();
+    checkAuth();
     
     const handleNewApproval = () => {
       console.log('New thumbnail approved, refreshing...');
@@ -28,6 +40,155 @@ const PublicGallery = () => {
     window.addEventListener('thumbnailApproved', handleNewApproval);
     return () => window.removeEventListener('thumbnailApproved', handleNewApproval);
   }, []);
+
+  useEffect(() => {
+    if (user) {
+      loadSavedItems();
+    }
+  }, [user]);
+
+  const checkAuth = () => {
+    const session = localStorage.getItem('supabase.auth.token');
+    if (session) {
+      try {
+        const data = JSON.parse(session);
+        setUser(data.user);
+      } catch (e) {
+        localStorage.removeItem('supabase.auth.token');
+      }
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('supabase.auth.token');
+    setUser(null);
+    setSavedItems([]);
+    setShowSaved(false);
+  };
+
+  const loadSavedItems = async () => {
+    if (!user) return;
+    
+    try {
+      const session = JSON.parse(localStorage.getItem('supabase.auth.token'));
+      const response = await fetch(`${SUPABASE_URL}/rest/v1/user_collections?user_id=eq.${user.id}&select=thumbnail_id`, {
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${session.access_token}`
+        }
+      });
+      
+      const data = await response.json();
+      setSavedItems(data.map(item => item.thumbnail_id));
+    } catch (error) {
+      console.error('Error loading saved items:', error);
+    }
+  };
+
+  const handleSave = async (thumbnailId) => {
+    if (!user) {
+      setShowAuth(true);
+      return;
+    }
+
+    try {
+      const session = JSON.parse(localStorage.getItem('supabase.auth.token'));
+      
+      if (savedItems.includes(thumbnailId)) {
+        // Unsave
+        await fetch(`${SUPABASE_URL}/rest/v1/user_collections?user_id=eq.${user.id}&thumbnail_id=eq.${thumbnailId}`, {
+          method: 'DELETE',
+          headers: {
+            'apikey': SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${session.access_token}`
+          }
+        });
+        setSavedItems(prev => prev.filter(id => id !== thumbnailId));
+      } else {
+        // Save
+        await fetch(`${SUPABASE_URL}/rest/v1/user_collections`, {
+          method: 'POST',
+          headers: {
+            'apikey': SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+            'Prefer': 'return=representation'
+          },
+          body: JSON.stringify({
+            user_id: user.id,
+            thumbnail_id: thumbnailId
+          })
+        });
+        setSavedItems(prev => [...prev, thumbnailId]);
+      }
+    } catch (error) {
+      console.error('Error saving item:', error);
+      alert('Error saving item. Please try again.');
+    }
+  };
+
+  const handleEmailAuth = async (e) => {
+    e.preventDefault();
+    setAuthLoading(true);
+    setAuthError(null);
+    setAuthMessage(null);
+
+    try {
+      if (authMode === 'signup') {
+        const response = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
+          method: 'POST',
+          headers: {
+            'apikey': SUPABASE_ANON_KEY,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            email: authEmail,
+            password: authPassword
+          })
+        });
+        
+        const result = await response.json();
+        if (!response.ok) {
+          throw new Error(result.error_description || result.message || 'Signup failed');
+        }
+        
+        setAuthMessage('Check your email to confirm your account!');
+        setAuthEmail('');
+        setAuthPassword('');
+      } else {
+        const response = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+          method: 'POST',
+          headers: {
+            'apikey': SUPABASE_ANON_KEY,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            email: authEmail,
+            password: authPassword
+          })
+        });
+        
+        const result = await response.json();
+        if (!response.ok) {
+          throw new Error(result.error_description || result.message || 'Login failed');
+        }
+        
+        localStorage.setItem('supabase.auth.token', JSON.stringify(result));
+        setUser(result.user);
+        setShowAuth(false);
+        loadSavedItems();
+      }
+    } catch (err) {
+      setAuthError(err.message);
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleGoogleLogin = () => {
+    const redirectUrl = `${SUPABASE_URL}/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(window.location.origin)}`;
+    window.location.href = redirectUrl;
+  };
 
   const loadApprovedThumbnails = async () => {
     setIsLoading(true);
@@ -83,7 +244,9 @@ const PublicGallery = () => {
   };
 
   const filteredThumbnails = useMemo(() => {
-    let filtered = thumbnails.filter(thumb => {
+    let filtered = showSaved 
+      ? thumbnails.filter(thumb => savedItems.includes(thumb.id))
+      : thumbnails.filter(thumb => {
       const matchesSearch = searchQuery === '' || 
         thumb.color_scheme?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         thumb.face_position?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -107,7 +270,7 @@ const PublicGallery = () => {
     }
 
     return filtered;
-  }, [searchQuery, selectedContentTypes, selectedDesignStyles, selectedColorSchemes, sortBy, thumbnails]);
+  }, [searchQuery, selectedContentTypes, selectedDesignStyles, selectedColorSchemes, sortBy, thumbnails, showSaved, savedItems]);
 
   useEffect(() => {
     const handleKeyPress = (e) => {
@@ -154,6 +317,51 @@ const PublicGallery = () => {
               <p className="text-slate-400 text-sm">Visual-first inspiration • Live from Supabase</p>
             </div>
             <div className="flex items-center gap-4">
+              {user ? (
+                <>
+                  {showSaved && (
+                    <button
+                      onClick={() => setShowSaved(false)}
+                      className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors text-sm"
+                    >
+                      ← Back to All
+                    </button>
+                  )}
+                  {!showSaved && (
+                    <button
+                      onClick={() => setShowSaved(true)}
+                      className="px-4 py-2 bg-purple-500 hover:bg-purple-600 text-white rounded-lg transition-colors text-sm flex items-center gap-2"
+                    >
+                      <Bookmark className="w-4 h-4" />
+                      My Saved ({savedItems.length})
+                    </button>
+                  )}
+                  <div className="relative group">
+                    <button className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg transition-colors text-sm flex items-center gap-2">
+                      <User className="w-4 h-4" />
+                      {user.email}
+                    </button>
+                    <div className="absolute right-0 top-full mt-2 bg-slate-800 border border-slate-700 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all">
+                      <button
+                        onClick={handleLogout}
+                        className="px-4 py-2 text-red-400 hover:bg-slate-700 rounded-lg transition-colors text-sm flex items-center gap-2 whitespace-nowrap"
+                      >
+                        <LogOut className="w-4 h-4" />
+                        Sign Out
+                      </button>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <button
+                  onClick={() => setShowAuth(true)}
+                  className="px-4 py-2 bg-purple-500 hover:bg-purple-600 text-white rounded-lg transition-colors text-sm flex items-center gap-2"
+                >
+                  <User className="w-4 h-4" />
+                  Sign In
+                </button>
+              )}
+              
               <div className="text-slate-400 text-sm">{filteredThumbnails.length} thumbnails</div>
               
               <div className="flex items-center gap-2 bg-slate-800/30 rounded-lg px-3 py-2 border border-slate-700/50">
@@ -218,8 +426,7 @@ const PublicGallery = () => {
           <div className="space-y-4">
             <div>
               <div className="flex items-center gap-2 mb-2">
-              <Grid className="w-4 h-4 text-purple-400" />
-
+                <Grid3x3 className="w-4 h-4 text-purple-400" />
                 <span className="text-slate-300 text-sm font-medium">Content Type</span>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -272,9 +479,24 @@ const PublicGallery = () => {
           <>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
               {filteredThumbnails.map(thumb => (
-                <div key={thumb.id} onClick={() => setSelectedThumbnail(thumb)} className="group cursor-pointer">
+                <div key={thumb.id} className="group cursor-pointer relative">
                   <div className="relative overflow-hidden rounded-lg bg-slate-800 shadow-xl hover:shadow-2xl hover:shadow-purple-500/20 transition-all duration-300 transform hover:-translate-y-1">
-                    <div className="aspect-video relative overflow-hidden">
+                    {/* Save button */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleSave(thumb.id);
+                      }}
+                      className={`absolute top-2 right-2 z-10 p-2 rounded-full transition-all ${
+                        savedItems.includes(thumb.id)
+                          ? 'bg-red-500 text-white'
+                          : 'bg-black/50 text-white hover:bg-black/70'
+                      }`}
+                    >
+                      <Heart className={`w-4 h-4 ${savedItems.includes(thumb.id) ? 'fill-current' : ''}`} />
+                    </button>
+
+                    <div className="aspect-video relative overflow-hidden" onClick={() => setSelectedThumbnail(thumb)}>
                       <img src={thumb.thumbnail_url} alt="" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
                       
                       <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300">
